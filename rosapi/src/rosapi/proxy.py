@@ -68,6 +68,16 @@ def init(node: Node) -> None:
     _node = node
 
 
+def cleanup() -> None:
+    """
+    Clean up the proxy module by releasing the global node reference.
+
+    This function should be called during shutdown to prevent memory leaks.
+    """
+    global _node
+    _node = None
+
+
 def get_topics(topics_glob: list[str], include_hidden: bool = False) -> list[str]:
     """Return a list of all the active topics in the ROS system."""
     topic_names = get_topic_names(node=_node, include_hidden_topics=include_hidden)

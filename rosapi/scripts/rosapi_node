@@ -540,10 +540,14 @@ def main(args: list[str] | None = None) -> None:
     node = Rosapi()
     try:
         rclpy.spin(node)
-        node.destroy_node()
-        rclpy.shutdown()
     except KeyboardInterrupt:
         print("Exiting due to SIGINT")
+    finally:
+        # Clean up resources to prevent memory leaks
+        params.cleanup()
+        proxy.cleanup()
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

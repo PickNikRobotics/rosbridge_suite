@@ -100,6 +100,20 @@ def init(parent_node_name: str, timeout_sec: float = DEFAULT_PARAM_TIMEOUT_SEC) 
     _timeout_sec = timeout_sec
 
 
+def cleanup() -> None:
+    """
+    Clean up the params module by destroying the node and releasing global references.
+
+    This function should be called during shutdown to prevent memory leaks.
+    """
+    global _node, _parent_node_name, _timeout_sec
+    if _node is not None:
+        _node.destroy_node()
+        _node = None
+    _parent_node_name = ""
+    _timeout_sec = DEFAULT_PARAM_TIMEOUT_SEC
+
+
 def set_param(node_name: str, name: str, value: str, params_glob: list[str]) -> None:
     """Set a parameter in a given node."""
     if params_glob and not any(fnmatch.fnmatch(str(name), glob) for glob in params_glob):
@@ -253,17 +267,21 @@ def _get_param_names(node_name: str) -> list[str]:
 
     client = _node.create_client(ListParameters, f"{node_name}/list_parameters")
 
-    if not client.service_is_ready():
+    try:
+        if not client.service_is_ready():
+            return []
+
+        request = ListParameters.Request()
+        future = client.call_async(request)
+        if _node.executor:
+            _node.executor.spin_until_future_complete(future, timeout_sec=_timeout_sec)
+        else:
+            rclpy.spin_until_future_complete(_node, future, timeout_sec=_timeout_sec)
+        response = future.result()
+
+        if response is not None:
+            return [f"{node_name}:{param_name}" for param_name in response.result.names]
         return []
-
-    request = ListParameters.Request()
-    future = client.call_async(request)
-    if _node.executor:
-        _node.executor.spin_until_future_complete(future, timeout_sec=_timeout_sec)
-    else:
-        rclpy.spin_until_future_complete(_node, future, timeout_sec=_timeout_sec)
-    response = future.result()
-
-    if response is not None:
-        return [f"{node_name}:{param_name}" for param_name in response.result.names]
-    return []
+    finally:
+        # Always destroy the client to prevent memory leaks
+        _node.destroy_client(client)
